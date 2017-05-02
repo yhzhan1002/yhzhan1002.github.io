@@ -276,7 +276,7 @@
               
                 
                 <a class="post-title-link" href="/2017/04/30/my-first-articel/" itemprop="url">
-                  my first articel
+                  安卓事件分发机制
                 </a>
               
             
@@ -329,8 +329,43 @@
       
         
           
-            <p>　夜里很肃静，肃静得连喘气的声音都能听得见</p>
+            <p>（摘自<a href="http://blog.csdn.net/guolin_blog/article/details/9097463/）" target="_blank" rel="external">http://blog.csdn.net/guolin_blog/article/details/9097463/）</a><br>　1.Android 中与 Touch 事件相关的方法包括：<br>    分发 dispatchTouchEvent(MotionEvent ev)、拦截 onInterceptTouchEvent(MotionEvent ev)、响应 onTouchEvent(MotionEvent ev)；<br>    能够响应这些方法的控件包括：ViewGroup 及其子类、Activity</p>
+<p>   2.需要注意的是 View 对 dispatchTouchEvent(MotionEvent ev) 和 onInterceptTouchEvent(MotionEvent ev)的响应的前提是可以向该 View 中添加子 View，<br>       如果当前的 View 已经是一个最小的单元 View（比如 TextView），那么就无法向这个最小 View 中添加子 View，也就无法向子 View 进行事件的分发和拦截，<br>    所以它没有 dispatchTouchEvent(MotionEvent ev) 和 onInterceptTouchEvent(MotionEvent ev)，只有 onTouchEvent(MotionEvent ev)。</p>
+<p>   3.只要触摸到了任何一个控件，就一定会调用该控件的dispatchTouchEvent方法。<br>   方法分析：<br>    public boolean dispatchTouchEvent(MotionEvent event) {<br>    if (mOnTouchListener != null &amp;&amp; (mViewFlags &amp; ENABLED_MASK) == ENABLED &amp;&amp;<br>            mOnTouchListener.onTouch(this, event)) {<br>        return true;<br>    }<br>    return onTouchEvent(event);<br>    }<br>        如果这三个条件都为真，就返回true，否则就去执行onTouchEvent(event)方法并返回。<br>       第一个条件 mOnTouchListener正是在setOnTouchListener方法里赋值的，也就是说只要我们给控件注册了touch事件，mOnTouchListener就一定被赋值了。</p>
+<pre><code>第二个条件(mViewFlags &amp; ENABLED_MASK) == ENABLED是判断当前点击的控件是否是enable的，按钮默认都是enable的，因此这个条件恒定为true。
 
+第三个条件 mOnTouchListener.onTouch(this, event)，其实也就是去回调控件注册touch事件时的onTouch方法。
+也就是说如果我们在onTouch方法里返回true，就会让这三个条件全部成立，从而整个方法直接返回true。
+如果我们在onTouch方法里返回false，就会再去执行onTouchEvent(event)方法。
+
+流程走向分析：
+    首先会去调用该控件所在布局的dispatchTouchEvent方法，然后在布局的dispatchTouchEvent方法中找到被点击的相应控件，
+    再去调用该控件的dispatchTouchEvent方法。如果我们点击了MyLayout中的按钮，会先去调用MyLayout的dispatchTouchEvent方法，
+    可是你会发现MyLayout中并没有这个方法。那就再到它的父类LinearLayout中找一找，发现也没有这个方法。那只好继续再找LinearLayout的父类ViewGroup，
+    你终于在ViewGroup中看到了这个方法，按钮的dispatchTouchEvent方法就是在这里调用的
+
+    当dispatchTouchEvent在进行事件分发的时候，只有前一个action返回true，才会触发后一个action。
+
+ 整个ViewGroup的事件分发流程：
+1. Android事件分发是先传递到ViewGroup，再由ViewGroup传递到View的。
+2. 在ViewGroup中可以通过onInterceptTouchEvent方法对事件传递进行拦截，onInterceptTouchEvent方法返回true代表不允许事件继续向子View传递，返回false代表不对事件进行拦截，默认返回false。
+3. 子View中如果将传递的事件消费掉，ViewGroup就不再对该事件进行处理了。   
+
+（1）onTouch和onTouchEvent有什么区别，又该如何使用？
+从源码中可以看出，这两个方法都是在View的dispatchTouchEvent中调用的，onTouch优先于onTouchEvent执行。
+如果在onTouch方法中通过返回true将事件消费掉，onTouchEvent将不会再执行。
+
+另外需要注意的是，onTouch能够得到执行需要两个前提条件，第一、mOnTouchListener的值不能为空，第二、当前点击的控件必须是enable的。
+因此如果你有一个控件是非enable的，那么给它注册onTouch事件将永远得不到执行。
+对于这一类控件，如果我们想要监听它的touch事件，就必须通过在该控件中重写onTouchEvent方法来实现。
+
+（2）为什么给ListView引入了一个滑动菜单的功能，ListView就不能滚动了？
+如果你阅读了Android实现图片滚动控件，含页签功能，让你的应用像淘宝一样炫起来 这篇文章。
+当时我在图片轮播器里使用Button，主要就是因为Button是可点击的，而ImageView是不可点击的。
+如果想要使用ImageView，可以有两种改法。
+第一，在ImageView的onTouch方法里返回true，这样可以保证ACTION_DOWN之后的其它action都能得到执行，才能实现图片滚动的效果。
+第二，在布局文件里面给ImageView增加一个android:clickable=&quot;true&quot;的属性，这样ImageView变成可点击的之后，即使在onTouch里返回了false，ACTION_DOWN之后的其它action也是可以得到执行的。
+</code></pre>
           
         
       
